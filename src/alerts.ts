@@ -5,11 +5,14 @@ const KEY='transactions';
 const IDKEY='paisawise_notification_ids';
 export const available=Boolean(bridge);
 export async function getStatus(){return bridge?bridge.getStatus():{enabled:false,permissionGranted:false}}
+export async function getSmsStatus(){return bridge?bridge.getSmsStatus():{enabled:false,permissionGranted:false}}
+export async function enableSms(){if(!bridge)throw new Error('SMS tracking is unavailable');return bridge.enableSms()}
 export async function enable(){if(!bridge)throw new Error('Notification tracking is unavailable in this build');await bridge.enableTracking();return bridge.openNotificationSettings()}
 export async function syncFutureAlerts(parseBankSms:any){
  if(!bridge)return {added:0};
  const status=await bridge.getStatus();
- if(!status.enabled||!status.permissionGranted)return {added:0};
+ const sms=await bridge.getSmsStatus();
+ if((!status.enabled||!status.permissionGranted)&&!sms.enabled)return {added:0};
  const pending=JSON.parse(await bridge.getPending());
  if(!Array.isArray(pending)||pending.length===0)return {added:0};
  const existingRaw=await AsyncStorage.getItem(KEY);
