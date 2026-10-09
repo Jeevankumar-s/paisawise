@@ -1,15 +1,18 @@
-name: Android debug APK
+name: Native Android debug APK
 on:
-  workflow_dispatch:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  apk:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: source
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -18,13 +21,25 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-      - run: npm install --no-audit --no-fund
-      - run: npm test
-      - run: npx expo prebuild --platform android --non-interactive
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Generate bare React Native CLI project
+        run: npx --yes @react-native-community/cli@20.0.0 init PaisaWise --version 0.81.4 --skip-install
+      - name: Copy source
+        run: |
+          cp source/App.tsx source/index.js source/app.json source/package.json source/babel.config.js source/metro.config.js source/tsconfig.json PaisaWise/
+          cp -R source/src source/tests PaisaWise/
+      - name: Install dependencies
+        working-directory: PaisaWise
+        run: npm install --no-audit --no-fund
+      - name: Run unit tests
+        working-directory: PaisaWise
+        run: npm test
+      - name: Assemble debug APK
+        working-directory: PaisaWise/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
-        if: success()
         with:
-          name: PaisaWise-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: PaisaWise-native-debug-apk
+          path: PaisaWise/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
