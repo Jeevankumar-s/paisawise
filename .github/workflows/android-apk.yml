@@ -31,6 +31,8 @@ jobs:
         run: |
           cp source/App.tsx source/index.js source/app.json source/package.json source/babel.config.js source/metro.config.js source/tsconfig.json PaisaWise/
           cp -R source/src source/tests PaisaWise/
+          cp source/native/*.kt PaisaWise/android/app/src/main/java/com/paisawise/
+          python3 source/native/patch_android.py PaisaWise/android/app/src/main
       - name: Install dependencies
         working-directory: PaisaWise
         run: npm install --no-audit --no-fund
