@@ -1,11 +1,15 @@
 package com.paisawise
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.provider.Settings
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
 import org.json.JSONArray
 
 class TransactionAlertsModule(private val context: ReactApplicationContext): ReactContextBaseJavaModule(context) {
@@ -15,6 +19,29 @@ class TransactionAlertsModule(private val context: ReactApplicationContext): Rea
     val prefs=context.getSharedPreferences("paisawise_alerts",0)
     prefs.edit().putLong("enabled_since",System.currentTimeMillis()).apply()
     promise.resolve(true)
+  }
+
+  @ReactMethod fun enableSms(promise: Promise) {
+    val activity=context.currentActivity
+    if(activity==null){promise.reject("ACTIVITY","Open PaisaWise to grant SMS permission");return}
+    if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECEIVE_SMS)==PackageManager.PERMISSION_GRANTED){
+      context.getSharedPreferences("paisawise_alerts",0).edit().putLong("sms_enabled_since",System.currentTimeMillis()).apply()
+      promise.resolve(true)
+    }else{
+      ActivityCompat.requestPermissions(activity,arrayOf(Manifest.permission.RECEIVE_SMS),7401)
+      promise.resolve(false)
+    }
+  }
+
+  @ReactMethod fun getSmsStatus(promise:Promise) {
+    val granted=ContextCompat.checkSelfPermission(context,Manifest.permission.RECEIVE_SMS)==PackageManager.PERMISSION_GRANTED
+    val prefs=context.getSharedPreferences("paisawise_alerts",0)
+    val since=prefs.getLong("sms_enabled_since",0L)
+    // A user who grants permission in Android settings must explicitly opt in to tracking.
+    val result=com.facebook.react.bridge.Arguments.createMap()
+    result.putBoolean("permissionGranted",granted)
+    result.putBoolean("enabled",granted&&since>0)
+    promise.resolve(result)
   }
 
   @ReactMethod fun getStatus(promise: Promise) {
