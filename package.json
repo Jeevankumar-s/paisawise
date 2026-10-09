@@ -1,1 +1,25 @@
-{"name":"PaisaWise","version":"0.2.0","private":true,"scripts":{"android":"react-native run-android","start":"react-native start","test":"node --test tests/*.test.cjs"},"dependencies":{"react":"19.1.0","react-native":"0.81.4","@react-native-async-storage/async-storage":"^2.2.0"},"devDependencies":{"@react-native-community/cli":"^20.0.0","@react-native-community/cli-platform-android":"^20.0.0","@react-native/babel-preset":"0.81.4","@react-native/metro-config":"0.81.4","@react-native/typescript-config":"0.81.4","@types/react":"^19.1.0","typescript":"^5.8.3"}}
+{
+  "name": "PaisaWise",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-native": "0.81.4",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "react-native-svg": "^15.12.1"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^20.0.0",
+    "@react-native-community/cli-platform-android": "^20.0.0",
+    "@react-native/babel-preset": "0.81.4",
+    "@react-native/metro-config": "0.81.4",
+    "@react-native/typescript-config": "0.81.4",
+    "@types/react": "^19.1.0",
+    "typescript": "^5.8.3"
+  }
+}
