@@ -1,1 +1,1 @@
-{"expo":{"name":"PaisaWise","slug":"paisawise","scheme":"paisawise","version":"0.1.0","orientation":"portrait","userInterfaceStyle":"light","android":{"package":"com.jeevankumar.paisawise"},"plugins":["expo-router","expo-sqlite"]}}
+{"name":"PaisaWise","displayName":"PaisaWise"}
