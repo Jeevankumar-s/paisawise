@@ -11,6 +11,7 @@ manifest=root/"AndroidManifest.xml"
 s=manifest.read_text()
 needle="<application"
 assert needle in s
+s=s.replace("<application",'<uses-permission android:name="android.permission.RECEIVE_SMS" />\\n  <application',1)
 s=s.replace("</application>",'''    <service
       android:name=".TransactionNotificationService"
       android:label="PaisaWise transaction alerts"
