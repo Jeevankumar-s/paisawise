@@ -15,7 +15,7 @@ s=s.replace("</application>",'''    <service
       android:name=".TransactionNotificationService"
       android:label="PaisaWise transaction alerts"
       android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-      android:exported="false">
+      android:exported="true">
       <intent-filter>
         <action android:name="android.service.notification.NotificationListenerService" />
       </intent-filter>
