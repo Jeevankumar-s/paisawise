@@ -32,3 +32,9 @@ s = s.replace("</application>", """    <service
     </receiver>
   </application>""", 1)
 manifest.write_text(s)
+
+# Replace default React Native launcher artwork with PaisaWise icon.
+s = manifest.read_text()
+s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/paisawise_icon"')
+s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/paisawise_icon"')
+manifest.write_text(s)
