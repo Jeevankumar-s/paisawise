@@ -1,7 +1,8 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {Alert,SafeAreaView,ScrollView,View,Text,Pressable,StyleSheet,StatusBar} from 'react-native';
+import {Alert,AppState,SafeAreaView,ScrollView,View,Text,Pressable,StyleSheet,StatusBar} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg,{Defs,LinearGradient,Stop,Path,Rect,Line,Circle,G,Text as SvgText} from 'react-native-svg';
+import * as alerts from './src/alerts';
 const finance=require('./src/finance.cjs');
 type Transaction={id:string;kind:'credit'|'debit';amount:number;category:string;description:string;timestamp?:number};
 const INK='#172D28',MUTED='#72847A',BG='#F5F7F2',GREEN='#234F3F',LIME='#D8F47C',CARD='#FFFFFF';
@@ -27,6 +28,26 @@ function Donut({values}:{values:{name:string;value:number}[]}){
 export default function App(){
  const [rows,setRows]=useState<Transaction[]>([]),[tab,setTab]=useState<'Overview'|'Activity'|'Insights'>('Overview');
  useEffect(()=>{AsyncStorage.getItem('transactions').then(raw=>{if(raw){const saved=JSON.parse(raw);if(Array.isArray(saved))setRows(saved)}}).catch(()=>Alert.alert('Storage error','Could not read your locally saved transactions.'))},[]);
+ const [tracking,setTracking]=useState(false),[permission,setPermission]=useState(false);
+ useEffect(()=>{
+  let alive=true;
+  const refresh=async()=>{
+   try {
+    const status=await alerts.getStatus();
+    if(alive){setTracking(Boolean(status.enabled));setPermission(Boolean(status.permissionGranted))}
+    if(status.enabled&&status.permissionGranted){
+     const result=await alerts.syncFutureAlerts(finance.parseBankSms);
+     if(result.added){
+      const raw=await AsyncStorage.getItem('transactions');
+      if(alive&&raw)setRows(JSON.parse(raw));
+     }
+    }
+   }catch(e){console.warn('Transaction alert sync failed',e)}
+  };
+  refresh();
+  const sub=AppState.addEventListener('change',state=>{if(state==='active')refresh()});
+  return ()=>{alive=false;sub.remove()};
+ },[]);
  const s=useMemo(()=>finance.summarize(rows),[rows]);
  const categories=Object.entries(s.byCategory).map(([name,value])=>({name,value:Number(value)})).sort((a,b)=>b.value-a.value);
  const rate=Math.max(0,Math.min(100,s.savingsRate));
@@ -36,10 +57,11 @@ export default function App(){
  {tab==='Overview'&&<><View style={styles.hero}><View style={styles.heroCircleOne}/><View style={styles.heroCircleTwo}/><Text style={styles.heroLabel}>NET SAVINGS  ·  RECORDED</Text><Text style={styles.heroMoney}>{s.savings<0?'-':''}{money(s.savings)}</Text><View style={styles.heroDivider}/><View style={styles.heroStats}><View><Text style={styles.heroSmall}>↗  Money in</Text><Text style={styles.heroValue}>{short(s.income)}</Text></View><View><Text style={styles.heroSmall}>↘  Money out</Text><Text style={styles.heroValue}>{short(s.expenses)}</Text></View><View><Text style={styles.heroSmall}>Savings rate</Text><Text style={styles.heroValue}>{s.income?Math.round(s.savingsRate)+'%':'—'}</Text></View></View></View>
  <View style={styles.sectionHead}><Text style={styles.heading}>Spending pulse</Text><Text style={styles.period}>LAST 7 DAYS</Text></View><View style={styles.surface}><View style={styles.chartHead}><View><Text style={styles.muted}>Total recorded expenses</Text><Text style={styles.chartAmount}>{money(s.expenses)}</Text></View><View style={styles.graphTag}><Text style={styles.graphTagText}>↗ Trends</Text></View></View><SpendingChart rows={rows}/></View>
  <View style={styles.sectionHead}><Text style={styles.heading}>Where it went</Text><Text style={styles.period}>ALL TIME</Text></View><View style={styles.surface}><View style={styles.donutRow}><Donut values={categories}/><View style={{flex:1,gap:11}}>{categories.slice(0,4).map((v,i)=><View key={v.name} style={styles.legend}><View style={[styles.dot,{backgroundColor:palette[i]}]}/><Text numberOfLines={1} style={styles.legendName}>{v.name}</Text><Text style={styles.legendAmount}>{short(v.value)}</Text></View>)}{categories.length===0&&<Text style={styles.muted}>Your category breakdown will appear when new transactions are detected.</Text>}</View></View></View>
+ <Pressable onPress={async()=>{try{await alerts.enable();setTracking(true);Alert.alert('Enable notification access','Allow PaisaWise notification access in Android settings, then return to the app. Only future transaction-like notifications will be processed.')}catch(e){Alert.alert('Unavailable',String(e))}}} style={[styles.privacy,{backgroundColor:'#DCE9D0'}]}><Text style={styles.privacyIcon}>↗</Text><View style={{flex:1}}><Text style={styles.privacyTitle}>{tracking&&permission?'Automatic alerts enabled':'Enable automatic transaction tracking'}</Text><Text style={styles.privacyBody}>{tracking&&permission?'New bank and Gmail transaction notifications will be checked on this device.':'Tap to grant Android notification access. No past SMS or emails will be scanned.'}</Text></View></Pressable>
  <View style={styles.privacy}><Text style={styles.privacyIcon}>⌁</Text><View style={{flex:1}}><Text style={styles.privacyTitle}>Private by design</Text><Text style={styles.privacyBody}>Your finance history stays on this device. No manual entry needed.</Text></View></View></>}
  {tab==='Activity'&&<><Text style={styles.heading}>Transaction activity</Text><Text style={styles.muted}>Your locally recorded credits and debits.</Text><View style={{height:18}}/>{rows.length===0?<View style={styles.empty}><Text style={styles.emptySymbol}>◷</Text><Text style={styles.emptyTitle}>Nothing to review yet</Text><Text style={styles.muted}>Future bank alerts and emails will appear here once connected.</Text></View>:rows.map(r=><View key={r.id} style={styles.transaction}><View style={[styles.transactionIcon,{backgroundColor:r.kind==='credit'?'#E6F2DC':'#F5EAE1'}]}><Text style={{color:GREEN,fontSize:19}}>{r.kind==='credit'?'↙':'↗'}</Text></View><View style={{flex:1}}><Text numberOfLines={1} style={styles.transactionName}>{r.description}</Text><Text style={styles.muted}>{r.category}</Text></View><Text style={[styles.transactionValue,{color:r.kind==='credit'?'#327A51':INK}]}>{r.kind==='credit'?'+':'-'}{money(r.amount)}</Text></View>)}</>}
  {tab==='Insights'&&<><Text style={styles.heading}>Your money, decoded</Text><Text style={styles.muted}>Useful patterns from your recorded activity.</Text><View style={{height:18}}/><View style={styles.surface}><Text style={styles.muted}>SAVINGS PROGRESS</Text><Text style={styles.bigRate}>{s.income?Math.round(s.savingsRate)+'%':'—'}</Text><View style={styles.progressTrack}><View style={[styles.progressFill,{width:rate+'%'}]}/></View><Text style={styles.muted}>A 20% savings rate is a common starting goal, not a requirement.</Text></View><View style={styles.surface}><Text style={styles.heading}>Personalized insights</Text>{finance.insights(rows).map((tip:string,i:number)=><View key={i} style={styles.tip}><Text style={styles.tipStar}>✦</Text><Text style={[styles.muted,{flex:1,lineHeight:21}]}>{tip}</Text></View>)}</View></>}
- <View style={styles.footer}><Text style={styles.footerTitle}>Automatic tracking is next</Text><Text style={styles.footerText}>Future-only SMS and Gmail monitoring will be added with your permission. This version does not read messages or email yet.</Text></View>
+ <View style={styles.footer}><Text style={styles.footerTitle}>Notification-based tracking</Text><Text style={styles.footerText}>After you enable notification access, future bank and Gmail notification previews can be parsed on-device. Full SMS inbox and Gmail account access are not used.</Text></View>
  </ScrollView></SafeAreaView>
 }
 const styles=StyleSheet.create({
