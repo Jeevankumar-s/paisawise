@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {GoogleSignin, statusCodes} from '@react-native-google-signin/google-signin';
+import {GoogleSignin} from '@react-native-google-signin/google-signin';
 
 const SCOPE='https://www.googleapis.com/auth/gmail.readonly';
 const CONFIG_KEY='paisawise.gmail.webClientId';
@@ -13,7 +13,9 @@ export async function configureGmail(webClientId:string){
  if(!/^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(id))throw new Error('Enter a valid Google OAuth Web client ID');
  await AsyncStorage.setItem(CONFIG_KEY,id);
  configuredId=id;
- GoogleSignin.configure({webClientId:id,scopes:[SCOPE],offlineAccess:false});
+ // Keep initial account sign-in limited to identity scopes. Request Gmail separately
+ // so consent errors can be attributed to the restricted Gmail scope.
+ GoogleSignin.configure({webClientId:id,offlineAccess:false});
 }
 export async function initGmail(){
  const id=await AsyncStorage.getItem(CONFIG_KEY);
@@ -24,7 +26,11 @@ export async function connectGmail(){
  if(!configuredId)throw new Error('Configure your OAuth client ID first');
  await GoogleSignin.hasPlayServices();
  await GoogleSignin.signIn();
- await GoogleSignin.addScopes({scopes:[SCOPE]});
+ try {
+  await GoogleSignin.addScopes({scopes:[SCOPE]});
+ } catch (error:any) {
+  throw new Error('Google account sign-in succeeded, but Gmail read-only authorization failed. Confirm the selected account is a test user in the OAuth project and Gmail API is enabled. Google error: '+String(error?.message||error));
+ }
  if(!(await AsyncStorage.getItem(START_KEY)))await AsyncStorage.setItem(START_KEY,String(Date.now()));
  return true;
 }
