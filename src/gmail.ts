@@ -3,8 +3,22 @@ import {GoogleSignin} from '@react-native-google-signin/google-signin';
 
 const SCOPE='https://www.googleapis.com/auth/gmail.readonly';
 const CONFIG_KEY='paisawise.gmail.webClientId';
+const ACCOUNTS_KEY='paisawise.gmail.accounts.v2';
+const ACTIVE_KEY='paisawise.gmail.active.v2';
 const START_KEY='paisawise.gmail.startedAt';
 const SEEN_KEY='paisawise.gmail.seenIds';
+type Account={email:string;startedAt:number;seenIds:string[]};
+let currentEmail='';
+let syncing=false;
+async function accounts():Promise<Account[]>{
+ const raw=await AsyncStorage.getItem(ACCOUNTS_KEY);
+ if(!raw)return [];
+ try{const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed.filter(a=>a&&typeof a.email==='string'&&Number.isFinite(a.startedAt)):[]}catch(_){return []}
+}
+export async function listGmailAccounts(){return accounts()}
+export async function activeGmailAccount(){return (await AsyncStorage.getItem(ACTIVE_KEY))||''}
+async function saveAccounts(value:Account[]){await AsyncStorage.setItem(ACCOUNTS_KEY,JSON.stringify(value))}
+
 const TX_KEY='transactions';
 let configuredId='';
 
@@ -25,20 +39,34 @@ export async function initGmail(){
 export async function connectGmail(){
  if(!configuredId)throw new Error('Configure your OAuth client ID first');
  await GoogleSignin.hasPlayServices();
- await GoogleSignin.signIn();
- try {
-  await GoogleSignin.addScopes({scopes:[SCOPE]});
- } catch (error:any) {
-  throw new Error('Google account sign-in succeeded, but Gmail read-only authorization failed. Confirm the selected account is a test user in the OAuth project and Gmail API is enabled. Google error: '+String(error?.message||error));
+ const signed=await GoogleSignin.signIn();
+ const user=(signed as any)?.data?.user||(signed as any)?.user;
+ const email=String(user?.email||'').toLowerCase().trim();
+ if(!email)throw new Error('Google did not return an account email');
+ try{await GoogleSignin.addScopes({scopes:[SCOPE]})}
+ catch(error:any){throw new Error('Google account sign-in succeeded but Gmail permission was denied: '+String(error?.message||error))}
+ const all=await accounts();
+ if(!all.some(a=>a.email===email)){
+  // Preserve original opt-in time when upgrading from the one-account version.
+  const legacyStart=Number(await AsyncStorage.getItem(START_KEY));
+  const legacySeen=JSON.parse((await AsyncStorage.getItem(SEEN_KEY))||'[]');
+  all.push({email,startedAt:legacyStart||Date.now(),seenIds:Array.isArray(legacySeen)?legacySeen:[]});
+  await saveAccounts(all);
  }
- if(!(await AsyncStorage.getItem(START_KEY)))await AsyncStorage.setItem(START_KEY,String(Date.now()));
- return true;
+ currentEmail=email;
+ await AsyncStorage.setItem(ACTIVE_KEY,email);
+ return {email,count:all.length};
 }
-export async function disconnectGmail(){
- try{await GoogleSignin.signOut()}catch(_){}
- // Preserve previously imported transactions but stop fetching new Gmail messages.
- await AsyncStorage.removeItem(START_KEY);
- await AsyncStorage.removeItem(SEEN_KEY);
+export async function disconnectGmail(email?:string){
+ const target=(email||await activeGmailAccount()).toLowerCase();
+ const remaining=(await accounts()).filter(a=>a.email!==target);
+ await saveAccounts(remaining);
+ if(target===await activeGmailAccount()){
+  try{await GoogleSignin.signOut()}catch(_){}
+  currentEmail='';
+  await AsyncStorage.removeItem(ACTIVE_KEY);
+ }
+ // Keep previously detected transactions when an account is disconnected.
 }
 async function token(){
  const result=await GoogleSignin.getTokens();
@@ -64,31 +92,49 @@ function bodyText(payload:any):string{
  return '';
 }
 export async function syncGmail(parse:any){
- const start=Number(await AsyncStorage.getItem(START_KEY));
- if(!start||!configuredId)return {added:0};
- const accessToken=await token();
- // Gmail after: accepts Unix seconds. Never request messages before opt-in.
- const after=Math.floor(start/1000);
- const q=encodeURIComponent('after:'+after+' {debited credited spent received withdrawn deposited refund UPI}');
- const listing=await gmailFetch('messages?maxResults=40&q='+q,accessToken);
- const ids=Array.isArray(listing.messages)?listing.messages:[];
- const seen=new Set<string>(JSON.parse((await AsyncStorage.getItem(SEEN_KEY))||'[]'));
- const rows=JSON.parse((await AsyncStorage.getItem(TX_KEY))||'[]');
- if(!Array.isArray(rows))throw new Error('Invalid transaction storage');
- let added=0;
- for(const item of ids){
-  if(!item.id||seen.has(item.id))continue;
-  const message=await gmailFetch('messages/'+encodeURIComponent(item.id)+'?format=full',accessToken);
-  if(Number(message.internalDate)<start)continue;
-  const content=(bodyText(message.payload)||message.snippet||'').slice(0,500);
-  const parsed=parse(content);
-  if(parsed){
-   const id='gmail:'+item.id;
-   if(!rows.some((r:any)=>r.id===id)){rows.unshift({...parsed,id,timestamp:Number(message.internalDate),description:parsed.description});added++}
+ if(syncing)return {added:0,reason:'busy'};
+ syncing=true;
+ try{
+  const email=await activeGmailAccount();
+  const all=await accounts();
+  const account=all.find(a=>a.email===email);
+  if(!account||!configuredId)return {added:0};
+  // Google Sign-In's native SDK maintains one active account session.
+  // Never attribute messages to another account when the user switches.
+  const signed=await GoogleSignin.getCurrentUser();
+  const actual=String((signed as any)?.user?.email||'').toLowerCase();
+  if(!actual||actual!==email)return {added:0,reason:'reauthorization_required'};
+  const accessToken=await token();
+  const q=encodeURIComponent('after:'+Math.floor(account.startedAt/1000)+' {debited credited spent received withdrawn deposited refund UPI}');
+  const seen=new Set<string>(account.seenIds);
+  const stored=JSON.parse((await AsyncStorage.getItem(TX_KEY))||'[]');
+  if(!Array.isArray(stored))throw new Error('Invalid transaction storage');
+  let added=0,pageToken='';
+  for(let page=0;page<3;page++){
+   const listing=await gmailFetch('messages?maxResults=100&q='+q+(pageToken?'&pageToken='+encodeURIComponent(pageToken):''),accessToken);
+   const ids=Array.isArray(listing.messages)?listing.messages:[];
+   for(const item of ids){
+    if(!item.id||seen.has(item.id))continue;
+    const message=await gmailFetch('messages/'+encodeURIComponent(item.id)+'?format=full',accessToken);
+    if(Number(message.internalDate)<account.startedAt){seen.add(item.id);continue}
+    const content=(bodyText(message.payload)||message.snippet||'').slice(0,1200);
+    const parsed=parse(content);
+    if(parsed){
+     const id='gmail:'+email+':'+item.id;
+     if(!stored.some((r:any)=>r.id===id)){
+      stored.unshift({...parsed,id,source:'gmail',sourceAccount:email,timestamp:Number(message.internalDate),description:parsed.description});
+      added++;
+     }
+    }
+    seen.add(item.id);
+   }
+   pageToken=listing.nextPageToken||'';
+   if(!pageToken)break;
   }
-  seen.add(item.id);
- }
- await AsyncStorage.setItem(TX_KEY,JSON.stringify(rows));
- await AsyncStorage.setItem(SEEN_KEY,JSON.stringify([...seen].slice(-2000)));
- return {added};
+  // Save transactions first; IDs ensure retries are safe after interrupted writes.
+  await AsyncStorage.setItem(TX_KEY,JSON.stringify(stored));
+  account.seenIds=Array.from(seen).slice(-4000);
+  await saveAccounts(all);
+  return {added,email};
+ }finally{syncing=false}
 }
