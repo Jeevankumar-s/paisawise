@@ -39,7 +39,26 @@ jobs:
       - name: Run unit tests
         working-directory: PaisaWise
         run: npm test
+      - name: Restore personal signing keystore
+        env:
+          PAISAWISE_KEYSTORE_BASE64: ${{ secrets.PAISAWISE_KEYSTORE_BASE64 }}
+          PAISAWISE_KEYSTORE_PASSWORD: ${{ secrets.PAISAWISE_KEYSTORE_PASSWORD }}
+          PAISAWISE_KEY_ALIAS: ${{ secrets.PAISAWISE_KEY_ALIAS }}
+          PAISAWISE_KEY_PASSWORD: ${{ secrets.PAISAWISE_KEY_PASSWORD }}
+        run: |
+          test -n "$PAISAWISE_KEYSTORE_BASE64"
+          test -n "$PAISAWISE_KEYSTORE_PASSWORD"
+          test -n "$PAISAWISE_KEY_ALIAS"
+          test -n "$PAISAWISE_KEY_PASSWORD"
+          printf '%s' "$PAISAWISE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/paisawise-release.jks"
+          test -s "$RUNNER_TEMP/paisawise-release.jks"
+          echo "PAISAWISE_KEYSTORE_PATH=$RUNNER_TEMP/paisawise-release.jks" >> "$GITHUB_ENV"
+          python3 source/native/patch_signing.py PaisaWise/android/app/build.gradle
       - name: Assemble standalone release APK
+        env:
+          PAISAWISE_KEYSTORE_PASSWORD: ${{ secrets.PAISAWISE_KEYSTORE_PASSWORD }}
+          PAISAWISE_KEY_ALIAS: ${{ secrets.PAISAWISE_KEY_ALIAS }}
+          PAISAWISE_KEY_PASSWORD: ${{ secrets.PAISAWISE_KEY_PASSWORD }}
         working-directory: PaisaWise/android
         run: |
           chmod +x gradlew
@@ -52,6 +71,9 @@ jobs:
           unzip -t "$APK" | tail -n 2
           unzip -Z1 "$APK" | grep -Fx 'assets/index.android.bundle'
           echo "Verified: standalone JS bundle is packaged in release APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" > "$RUNNER_TEMP/paisawise-signature.txt"
+          grep -F 'a93aa2929843c99a04ad72b518b07cad2559a97d' "$RUNNER_TEMP/paisawise-signature.txt"
+          echo "Verified: APK is signed with the expected permanent PaisaWise SHA-1 certificate"
       - uses: actions/upload-artifact@v4
         with:
           name: PaisaWise-standalone-release-apk
