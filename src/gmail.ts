@@ -31,6 +31,7 @@ export async function configureGmail(webClientId:string){
  // so consent errors can be attributed to the restricted Gmail scope.
  GoogleSignin.configure({webClientId:id,offlineAccess:false});
 }
+export async function getSavedGmailClientId(){return (await AsyncStorage.getItem(CONFIG_KEY))||''}
 export async function initGmail(){
  const id=await AsyncStorage.getItem(CONFIG_KEY);
  if(id)await configureGmail(id);
