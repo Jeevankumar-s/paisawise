@@ -17,10 +17,12 @@ function parseProlificEmail(text){
  const s=String(text||'');
  if(!/prolific/i.test(s)||!/paid|payment|payout|cashout|cash out|transferred|received|credited|sent you|has been sent|successfully processed/i.test(s))return null;
  if(/payment method|payment details|request a payout|cash out now|pending payment|payment pending|payout requested/i.test(s)&&!/has been paid|payment received|payout completed|successfully paid/i.test(s))return null;
- const match=s.match(/(?:€|EUR|\\$|USD|US\\$|£|GBP)\\s*([\\d,]+(?:\\.\\d{1,2})?)/i)||s.match(/([\\d,]+(?:\\.\\d{1,2})?)\\s*(EUR|USD|GBP)/i);
+ const match=s.match(/(€|EUR|US\$|\$|USD|£|GBP)\s*([\d,]+(?:\.\d{1,2})?)/i)||s.match(/([\d,]+(?:\.\d{1,2})?)\s*(EUR|USD|GBP)/i);
  if(!match)return null;
- const prefix=match[0].replace(match[1],'').toUpperCase();const currency=/€|EUR/.test(prefix)?'EUR':/£|GBP/.test(prefix)?'GBP':'USD';
- const amount=Number(match[1].replace(/,/g,''));if(!Number.isFinite(amount)||amount<=0)return null;
+ const amountText=match[0].match(/[\d,]+(?:\.\d{1,2})?/)[0];
+ const symbol=match[0].replace(amountText,'').trim().toUpperCase();
+ const currency=/€|EUR/.test(symbol)?'EUR':/£|GBP/.test(symbol)?'GBP':'USD';
+ const amount=Number(amountText.replace(/,/g,''));if(!Number.isFinite(amount)||amount<=0)return null;
  return {kind:'credit',amount,currency,category:'Other',description:'Prolific payout · '+currency+' '+amount.toFixed(2)};
 }
 function summarize(rows){let income=0,expenses=0;const byCategory={};for(const r of rows){if(r.category==='Transfers'||(r.currency&&r.currency!=='INR'))continue;if(r.kind==='credit')income+=r.amount;else{expenses+=r.amount;byCategory[r.category]=(byCategory[r.category]||0)+r.amount}}return {income,expenses,savings:income-expenses,savingsRate:income?((income-expenses)/income)*100:0,byCategory}}
