@@ -27,8 +27,10 @@ export async function syncFutureAlerts(parseBankSms:any){
   if(seen.has(item.id)){acknowledged.push(item.id);continue}
   const parsed=parseBankSms(item.text);
   if(parsed){
-   rows.unshift({...parsed,id:item.id,timestamp:Number(item.timestamp)||Date.now(),description:parsed.description});
-   added++;
+   if(!rows.some((r:any)=>r.id===item.id)){
+    rows.unshift({...parsed,id:item.id,source:item.source||'sms',timestamp:Number(item.timestamp)||Date.now(),description:parsed.description});
+    added++;
+   }
   }
   seen.add(item.id);acknowledged.push(item.id);
  }

@@ -8,3 +8,8 @@ test('Prolific EUR completed payout',()=>{const x=f.parseProlificEmail('Prolific
 test('Prolific USD completed payout',()=>{const x=f.parseProlificEmail('Prolific payment received $8.50');assert.equal(x.currency,'USD');assert.equal(x.amount,8.5)});
 test('Prolific pending payout not recorded',()=>assert.equal(f.parseProlificEmail('Prolific payout requested for $10.00; payment pending'),null));
 test('foreign earnings not incorrectly added as INR',()=>assert.equal(f.summarize([{kind:'credit',amount:10,currency:'EUR',category:'Other'}]).income,0));
+
+test('Google Pay sent ₹200 SMS',()=>{const x=f.parseBankSms('Rs.200.00 paid to ABC via Google Pay UPI Ref 123456');assert.equal(x.kind,'debit');assert.equal(x.amount,200)});
+test('UPI transferred to merchant',()=>assert.equal(f.parseBankSms('INR 200 transferred to XYZ using UPI').kind,'debit'));
+test('UPI received money',()=>assert.equal(f.parseBankSms('INR 200 received from XYZ via UPI').kind,'credit'));
+test('Do not count ambiguous UPI message',()=>assert.equal(f.parseBankSms('Your UPI limit is INR 200'),null));

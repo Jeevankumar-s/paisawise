@@ -1,6 +1,18 @@
 const categories=['Food','Shopping','Groceries','Transport','Bills','Health','Salary','Transfers','Other'];
 function classify(description,kind){const t=description.toLowerCase();if(kind==='credit'&&/salary|payroll|wages/.test(t))return 'Salary';if(/swiggy|zomato|restaurant|cafe|food/.test(t))return 'Food';if(/amazon|flipkart|myntra|shopping/.test(t))return 'Shopping';if(/grocery|supermarket|vegetable|bigbasket|zepto/.test(t))return 'Groceries';if(/uber|ola|petrol|fuel|metro|bus/.test(t))return 'Transport';if(/electricity|recharge|broadband|rent|bill/.test(t))return 'Bills';if(/hospital|pharmacy|medical/.test(t))return 'Health';if(/self transfer|own account/.test(t))return 'Transfers';return 'Other'}
-function parseBankSms(body){const s=String(body||'');if(/otp|one.time password|verification code|available credit limit/i.test(s)&& !/debited|credited/i.test(s))return null;const m=s.match(/(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);if(!m)return null;const debit=/debited|spent|withdrawn|paid|purchase|sent to/i.test(s);const credit=/credited|received|deposited|refund/i.test(s);if(debit===credit)return null;const amount=Number(m[1].replace(/,/g,''));if(!Number.isFinite(amount)||amount<=0)return null;const kind=debit?'debit':'credit';const account=(s.match(/(?:a\/c|account|acct|card)\s*(?:no\.?\s*)?[xX*\-\s]*(\d{3,4})/i)||[])[1]||null;return {amount,kind,account,category:classify(s,kind),description:s.slice(0,180)}}
+function parseBankSms(body){
+ const s=String(body||'');
+ if(/otp|one.time password|verification code|available credit limit/i.test(s)&&!/debited|credited|paid to|sent to|received from/i.test(s))return null;
+ const match=s.match(/(?:INR|Rs\\.?|₹)\\s*([\\d,]+(?:\\.\\d{1,2})?)/i);
+ if(!match)return null;
+ const amount=Number(match[1].replace(/,/g,''));if(!Number.isFinite(amount)||amount<=0)return null;
+ const debit=/\\b(debited|spent|withdrawn|paid to|payment (?:of|to|successful|completed)|sent to|transferred to|purchase|upi debit|paid via|paid using)\\b/i.test(s);
+ const credit=/\\b(credited|received|deposited|refund|money received|received from|upi credit)\\b/i.test(s);
+ if(debit===credit)return null;
+ const kind=debit?'debit':'credit';
+ const account=(s.match(/(?:a\\/c|account|acct|card)\\s*(?:no\\.?\\s*)?[xX*\\-\\s]*(\\d{3,4})/i)||[])[1]||null;
+ return {amount,kind,account,currency:'INR',category:classify(s,kind),description:s.slice(0,180)};
+}
 function parseProlificEmail(text){
  const s=String(text||'');
  if(!/prolific/i.test(s)||!/paid|payment|payout|cashout|cash out|transferred|received|credited|sent you|has been sent|successfully processed/i.test(s))return null;
