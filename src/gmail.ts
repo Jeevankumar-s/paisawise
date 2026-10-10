@@ -88,9 +88,14 @@ function decodeBase64Url(data:string){
  try{return decodeURIComponent(bytes.map(b=>'%'+b.toString(16).padStart(2,'0')).join(''))}catch(_){return String.fromCharCode(...bytes.slice(0,4000))}
 }
 function bodyText(payload:any):string{
- const parts=[payload,...(payload?.parts||[])];
- for(const part of parts){if(part?.mimeType==='text/plain'&&part?.body?.data)return decodeBase64Url(part.body.data)}
- return '';
+ if(!payload)return '';
+ const queue=[payload];const textParts:string[]=[];
+ while(queue.length&&textParts.length<8){
+  const part=queue.shift();
+  if(part?.mimeType==='text/plain'&&part?.body?.data)textParts.push(decodeBase64Url(part.body.data));
+  if(Array.isArray(part?.parts))queue.push(...part.parts);
+ }
+ return textParts.join(' ').slice(0,5000);
 }
 export async function syncGmail(parse:any){
  if(syncing)return {added:0,reason:'busy'};
@@ -106,7 +111,7 @@ export async function syncGmail(parse:any){
   const actual=String((signed as any)?.user?.email||'').toLowerCase();
   if(!actual||actual!==email)return {added:0,reason:'reauthorization_required'};
   const accessToken=await token();
-  const q=encodeURIComponent('after:'+Math.floor(account.startedAt/1000)+' {debited credited spent received withdrawn deposited refund UPI}');
+  const q=encodeURIComponent('after:'+Math.floor(account.startedAt/1000)+' {debited credited spent received withdrawn deposited refund UPI prolific payout payment paid cashout}');
   const seen=new Set<string>(account.seenIds);
   const stored=JSON.parse((await AsyncStorage.getItem(TX_KEY))||'[]');
   if(!Array.isArray(stored))throw new Error('Invalid transaction storage');
@@ -118,7 +123,9 @@ export async function syncGmail(parse:any){
     if(!item.id||seen.has(item.id))continue;
     const message=await gmailFetch('messages/'+encodeURIComponent(item.id)+'?format=full',accessToken);
     if(Number(message.internalDate)<account.startedAt){seen.add(item.id);continue}
-    const content=(bodyText(message.payload)||message.snippet||'').slice(0,1200);
+    const subject=(message.payload?.headers||[]).find((h:any)=>String(h.name).toLowerCase()==='subject')?.value||'';
+    const from=(message.payload?.headers||[]).find((h:any)=>String(h.name).toLowerCase()==='from')?.value||'';
+    const content=[subject,from,bodyText(message.payload),message.snippet||''].join(' ').slice(0,5000);
     const parsed=parse(content);
     if(parsed){
      const id='gmail:'+email+':'+item.id;
