@@ -10,7 +10,7 @@ function parseBankSms(body){
  const credit=/\\b(credited|received|deposited|refund|money received|received from|upi credit)\\b/i.test(s);
  if(debit===credit)return null;
  const kind=debit?'debit':'credit';
- const account=(s.match(/(?:a\\/c|account|acct|card)\\s*(?:no\\.?\\s*)?[xX*\\-\\s]*(\\d{3,4})/i)||[])[1]||null;
+ const account=(s.match(/(?:a\/c|account|acct|card)\s*(?:no\.?\s*)?[xX*\-\s]*(\d{3,4})/i)||[])[1]||null;
  return {amount,kind,account,currency:'INR',category:classify(s,kind),description:s.slice(0,180)};
 }
 function parseProlificEmail(text){
