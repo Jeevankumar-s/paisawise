@@ -13,3 +13,17 @@ test('Google Pay sent ₹200 SMS',()=>{const x=f.parseBankSms('Rs.200.00 paid to
 test('UPI transferred to merchant',()=>assert.equal(f.parseBankSms('INR 200 transferred to XYZ using UPI').kind,'debit'));
 test('UPI received money',()=>assert.equal(f.parseBankSms('INR 200 received from XYZ via UPI').kind,'credit'));
 test('Do not count ambiguous UPI message',()=>assert.equal(f.parseBankSms('Your UPI limit is INR 200'),null));
+
+test('BOB Rs.200 Dr from account and Cr to recipient is debit',()=>{
+ const sms='Rs.200.00 Dr. from A/C XXXXXX5109 and Cr. to paytmqr71fx88@ptys. Ref:628325978778. AvlBal:Rs130.07(2026:10:10 11:57:56). Not you? Call BOB';
+ const x=f.parseBankSms(sms);assert.equal(x.kind,'debit');assert.equal(x.amount,200);
+});
+test('BOB Rs.1500 Dr from account is debit',()=>{
+ const x=f.parseBankSms('Rs.1500.00 Dr. from A/C XXXXXX5109 and Cr. to recipient@oksbi. Ref:628266005658. AvlBal:Rs471.11');
+ assert.equal(x.kind,'debit');assert.equal(x.amount,1500);
+});
+test('BOB account credited with INR 1000 is credit',()=>{
+ const x=f.parseBankSms('Dear BOB UPI User: Your account is credited with INR 1000.00 on 2026-09-22 by UPI Ref No 130065147679; AvlBal: Rs2133.70 - BOB');
+ assert.equal(x.kind,'credit');assert.equal(x.amount,1000);
+});
+test('Balance-only SMS is not a transaction',()=>assert.equal(f.parseBankSms('AvlBal:Rs130.07'),null));

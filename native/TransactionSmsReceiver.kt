@@ -22,7 +22,7 @@ class TransactionSmsReceiver:BroadcastReceiver() {
   // Discard authentication messages without persisting them.
   if(Regex("(?i)\\b(otp|one.time password|verification code|login code|security code|passcode)\\b").containsMatchIn(text))return
   if(!Regex("(?i)(₹|\\bINR\\b|\\bRs\\.?\\s*[0-9])").containsMatchIn(text))return
-  if(!Regex("(?i)\\b(debited|credited|spent|paid|received|withdrawn|deposited|refund|upi)\\b").containsMatchIn(text))return
+  if(!Regex("(?i)\\b(debited|credited|spent|paid|received|withdrawn|deposited|refund|upi|dr|cr|payment|transferred)\\b").containsMatchIn(text))return
   val sender=messages.first().originatingAddress ?: ""
   val id=MessageDigest.getInstance("SHA-256").digest((sender+"|"+timestamp+"|"+text).toByteArray()).take(16).joinToString(""){"%02x".format(it)}
   synchronized(TransactionNotificationService.lock) {
